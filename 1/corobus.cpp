@@ -12,7 +12,7 @@
 /// Queue that do not need reallocation
 class StableQueue {
 public:
-    explicit StableQueue() {}
+    StableQueue() {}
 
 	void init(size_t capacity) {
 		buffer_.resize(capacity);
@@ -138,7 +138,8 @@ coro_bus_delete(struct coro_bus *bus)
 int
 coro_bus_channel_open(struct coro_bus *bus, size_t size_limit)
 {
-	coro_bus_channel *ch = new coro_bus_channel{};
+	coro_bus_channel *ch = new coro_bus_channel;
+	ch->size_limit = size_limit;
 	ch->data.init(size_limit);
 	rlist_create(&ch->send_queue.coros);
 	rlist_create(&ch->recv_queue.coros);
