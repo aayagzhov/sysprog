@@ -98,6 +98,11 @@ typedef struct coro_bus_channel {
 	struct wakeup_queue send_queue;
 	struct wakeup_queue recv_queue;
 	StableQueue data;
+	
+	coro_bus_channel() : size_limit(0) {
+		rlist_create(&send_queue.coros);
+		rlist_create(&recv_queue.coros);
+	}
 } coro_bus_channel;
 
 struct coro_bus {
@@ -141,8 +146,6 @@ coro_bus_channel_open(struct coro_bus *bus, size_t size_limit)
 	coro_bus_channel *ch = new coro_bus_channel;
 	ch->size_limit = size_limit;
 	ch->data.init(size_limit);
-	rlist_create(&ch->send_queue.coros);
-	rlist_create(&ch->recv_queue.coros);
 
 	for (size_t i{0}; i < bus->channels.size(); ++i) {
 		if (bus->channels[i] == nullptr) {
