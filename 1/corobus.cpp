@@ -93,6 +93,16 @@ wakeup_queue_wakeup_all(struct wakeup_queue *queue)
 	}
 }
 
+static void
+wakeup_queue_clear(struct wakeup_queue *queue)
+{
+	while (!rlist_empty(&queue->coros)) {
+		struct wakeup_entry *entry = rlist_first_entry(&queue->coros,
+			struct wakeup_entry, base);
+		rlist_del_entry(entry, base);
+	}
+}
+
 typedef struct coro_bus_channel {
 	size_t size_limit;
 	struct wakeup_queue send_queue;
@@ -134,7 +144,12 @@ coro_bus_delete(struct coro_bus *bus)
 {
 	for (size_t i{0}; i < bus->channels.size(); ++i) {
 		if (bus->channels[i] != nullptr) {
-			delete bus->channels[i];
+			coro_bus_channel *ch = bus->channels[i];
+			wakeup_queue_wakeup_all(&ch->send_queue);
+			wakeup_queue_wakeup_all(&ch->recv_queue);
+			wakeup_queue_clear(&ch->send_queue);
+			wakeup_queue_clear(&ch->recv_queue);
+			delete ch;
 		}
 	}
 	delete bus;
@@ -173,6 +188,9 @@ coro_bus_channel_close(struct coro_bus *bus, int channel)
 
 	wakeup_queue_wakeup_all(&ch->send_queue);
 	wakeup_queue_wakeup_all(&ch->recv_queue);
+	
+	wakeup_queue_clear(&ch->send_queue);
+	wakeup_queue_clear(&ch->recv_queue);
 
 	bus->channels[channel] = nullptr;
 	delete ch;
