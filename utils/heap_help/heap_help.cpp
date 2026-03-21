@@ -281,6 +281,10 @@ heap_help::trace(void *ptr, size_t size)
 	}
 	a->mem = ptr;
 	a->size = size;
+	/* Under ASAN, aligned_alloc may return a recycled address before
+	 * heap_help sees the matching delete (ASAN delays actual frees).
+	 * Remove the stale entry to avoid a false double-allocation assert. */
+	m_allocations.erase(ptr);
 	heaph_assert(m_allocations.emplace(ptr, a).second);
 	++m_alloc_count;
 	m_mutex.unlock();
@@ -325,7 +329,11 @@ operator new(std::size_t n)
 void *
 operator new(std::size_t count, std::align_val_t al)
 {
-	void *res = std::aligned_alloc((size_t)al, count);
+	/* aligned_alloc requires size to be a multiple of alignment (C11/POSIX).
+	 * Round up to satisfy this requirement on macOS. */
+	size_t alignment = (size_t)al;
+	size_t rounded = (count + alignment - 1) / alignment * alignment;
+	void *res = ::aligned_alloc(alignment, rounded);
 	heaph_assert(res != nullptr);
 	glob_hh.trace(res, count);
 	return res;
@@ -350,4 +358,45 @@ operator delete(void *ptr, std::align_val_t) noexcept
 {
 	glob_hh.untrace(ptr);
 	std::free(ptr);
+}
+
+void
+operator delete[](void *ptr) noexcept
+{
+	glob_hh.untrace(ptr);
+	std::free(ptr);
+}
+
+void
+operator delete[](void *ptr, std::size_t) noexcept
+{
+	glob_hh.untrace(ptr);
+	std::free(ptr);
+}
+
+void
+operator delete[](void *ptr, std::align_val_t) noexcept
+{
+	glob_hh.untrace(ptr);
+	std::free(ptr);
+}
+
+void *
+operator new[](std::size_t n)
+{
+	void *res = std::malloc(n);
+	heaph_assert(res != nullptr);
+	glob_hh.trace(res, n);
+	return res;
+}
+
+void *
+operator new[](std::size_t count, std::align_val_t al)
+{
+	size_t alignment = (size_t)al;
+	size_t rounded = (count + alignment - 1) / alignment * alignment;
+	void *res = ::aligned_alloc(alignment, rounded);
+	heaph_assert(res != nullptr);
+	glob_hh.trace(res, count);
+	return res;
 }
